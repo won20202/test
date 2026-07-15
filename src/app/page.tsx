@@ -66,12 +66,27 @@ export default function Home() {
   const [timerActive, setTimerActive] = useState<boolean>(false);
   const [timerInitialSeconds, setTimerInitialSeconds] = useState<number>(180);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const lastTickTimeRef = useRef<number>(0);
 
   // Sound Synthesizers using Web Audio API
+  const getAudioContext = () => {
+    if (typeof window === "undefined") return null;
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (audioCtxRef.current.state === "suspended") {
+      audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  };
+
   const playTick = () => {
     if (!soundEnabled) return;
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = getAudioContext();
+      if (!audioCtx) return;
+      
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.connect(gain);
@@ -90,7 +105,9 @@ export default function Home() {
   const playWin = () => {
     if (!soundEnabled) return;
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = getAudioContext();
+      if (!audioCtx) return;
+
       const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50]; // C major chord arpeggio
       notes.forEach((freq, index) => {
         const osc = audioCtx.createOscillator();
@@ -111,19 +128,37 @@ export default function Home() {
 
   const playAlarm = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      [0, 0.3, 0.6].forEach((delay) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = "square";
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime + delay);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime + delay);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.25);
-        osc.start(audioCtx.currentTime + delay);
-        osc.stop(audioCtx.currentTime + delay + 0.25);
-      });
+      const audioCtx = getAudioContext();
+      if (!audioCtx) return;
+
+      // Schedule a 4.5-second ringing alarm (repeating dual beeps)
+      for (let i = 0; i < 6; i++) {
+        const timeBase = audioCtx.currentTime + i * 0.8;
+        
+        // High alert beep 1
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.type = "square";
+        osc1.frequency.setValueAtTime(987.77, timeBase); // B5 note
+        gain1.gain.setValueAtTime(0.12, timeBase);
+        gain1.gain.exponentialRampToValueAtTime(0.001, timeBase + 0.25);
+        osc1.start(timeBase);
+        osc1.stop(timeBase + 0.25);
+        
+        // High alert beep 2
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.type = "square";
+        osc2.frequency.setValueAtTime(987.77, timeBase + 0.3);
+        gain2.gain.setValueAtTime(0.12, timeBase + 0.3);
+        gain2.gain.exponentialRampToValueAtTime(0.001, timeBase + 0.55);
+        osc2.start(timeBase + 0.3);
+        osc2.stop(timeBase + 0.55);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -346,6 +381,8 @@ export default function Home() {
     const list = wheelStudents.length > 0 ? wheelStudents : students;
     if (list.length === 0) return;
 
+    getAudioContext(); // pre-unlock AudioContext on user click
+
     setSelectedStudent(null);
     setIsSpinning(true);
 
@@ -370,9 +407,14 @@ export default function Home() {
       rotationAngleRef.current = currentAngle;
       drawWheel(currentAngle);
 
-      // Play tick sound when moving past a slice
+      // Play tick sound when moving past a slice, with throttling to prevent audio delay
       if (Math.abs(currentAngle - lastTickAngle) >= tickInterval) {
-        playTick();
+        const nowMs = performance.now();
+        // Play tick sound at most once every 65ms to prevent audio queue overload
+        if (nowMs - lastTickTimeRef.current > 65) {
+          playTick();
+          lastTickTimeRef.current = nowMs;
+        }
         lastTickAngle = currentAngle;
       }
 
@@ -443,6 +485,7 @@ export default function Home() {
 
   const toggleTimer = () => {
     if (timerSeconds <= 0) return;
+    getAudioContext(); // pre-unlock AudioContext on user click
     setTimerActive(!timerActive);
   };
 
@@ -459,6 +502,7 @@ export default function Home() {
   };
 
   const applyPreset = (minutes: number) => {
+    getAudioContext(); // pre-unlock AudioContext on user click
     setTimerInputMin(minutes);
     setTimerInputSec(0);
     setTimerSeconds(minutes * 60);
