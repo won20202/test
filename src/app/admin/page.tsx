@@ -672,22 +672,52 @@ export default function Admin() {
   };
 
   // --- Counseling Logs Backup (Export/Import) ---
-  const exportLogsToJSON = () => {
+  const exportLogsToExcel = () => {
     if (logs.length === 0) {
       showNotification("백업할 상담 기록이 존재하지 않습니다.", "error");
       return;
     }
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(logs, null, 2));
-    const downloadAnchor = document.createElement("a");
-    downloadAnchor.setAttribute("href", dataStr);
-    
-    const today = new Date();
-    const dateStr = today.toISOString().split("T")[0];
-    downloadAnchor.setAttribute("download", `오션중_2-2_상담일지_백업_${dateStr}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    showNotification("상담일지가 JSON 파일로 백업되었습니다.");
+
+    try {
+      // 1. Map logs to human-readable columns
+      const data = logs.map((log) => ({
+        "상담 일자": log.date,
+        "학생 이름": log.student_name,
+        "번호": log.student_number || "",
+        "상담 분류": log.category,
+        "상담 내용": log.content,
+        "조치 및 지도 계획": log.action_plan || "",
+      }));
+
+      // 2. Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(data);
+
+      // 3. Set column widths for better readability
+      const maxColWidths = [
+        { wch: 12 }, // 상담 일자
+        { wch: 10 }, // 학생 이름
+        { wch: 6 },  // 번호
+        { wch: 12 }, // 상담 분류
+        { wch: 50 }, // 상담 내용
+        { wch: 40 }, // 조치 및 지도 계획
+      ];
+      worksheet["!cols"] = maxColWidths;
+
+      // 4. Create workbook and append worksheet
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "상담일지");
+
+      // 5. Generate date string for file name
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0];
+
+      // 6. Write and download
+      XLSX.writeFile(workbook, `오션중_2-2_상담일지_백업_${dateStr}.xlsx`);
+      showNotification("상담일지가 Excel 파일로 백업되었습니다.");
+    } catch (error) {
+      console.error(error);
+      showNotification("Excel 백업 중 오류가 발생했습니다.", "error");
+    }
   };
 
   const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1237,7 +1267,7 @@ export default function Admin() {
 
                   {/* Export Backup */}
                   <button
-                    onClick={exportLogsToJSON}
+                    onClick={exportLogsToExcel}
                     className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-[10px] font-bold text-slate-400 hover:text-white transition flex items-center gap-1"
                     title="상담 데이터 내보내기"
                   >
