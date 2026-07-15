@@ -248,13 +248,46 @@ export default function Admin() {
     }
   };
 
+  const openChangePasswordModal = async () => {
+    setChangeCurrentPassword("");
+    setChangeNewPassword("");
+    setChangeConfirmPassword("");
+    setChangePasswordError("");
+    setIsGoogleVerified(false);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {}
+    }
+    setShowChangePasswordModal(true);
+  };
+
+  const closeChangePasswordModal = async () => {
+    setShowChangePasswordModal(false);
+    setIsGoogleVerified(false);
+    setChangeCurrentPassword("");
+    setChangeNewPassword("");
+    setChangeConfirmPassword("");
+    setChangePasswordError("");
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {}
+    }
+  };
+
   const handleGoogleVerify = async () => {
     if (isSupabaseConfigured && supabase) {
       try {
+        // Sign out first to ensure we request a fresh OAuth login
+        await supabase.auth.signOut();
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
             redirectTo: window.location.origin + "/admin?action=change_password",
+            queryParams: {
+              prompt: "select_account" // Forces Google to show the account selector
+            }
           },
         });
         if (error) {
@@ -317,10 +350,7 @@ export default function Admin() {
       const data = await res.json();
       if (res.ok && data.success) {
         showNotification("비밀번호가 성공적으로 변경되었습니다.");
-        setShowChangePasswordModal(false);
-        setChangeCurrentPassword("");
-        setChangeNewPassword("");
-        setChangeConfirmPassword("");
+        await closeChangePasswordModal();
       } else {
         setChangePasswordError(data.message || "비밀번호 변경에 실패했습니다.");
       }
@@ -827,13 +857,7 @@ export default function Admin() {
 
           {isSupabaseActive && (
             <button
-              onClick={() => {
-                setChangeCurrentPassword("");
-                setChangeNewPassword("");
-                setChangeConfirmPassword("");
-                setChangePasswordError("");
-                setShowChangePasswordModal(true);
-              }}
+              onClick={openChangePasswordModal}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-850 hover:bg-slate-800 hover:text-white transition text-xs font-semibold text-slate-400"
             >
               <Lock className="w-3.5 h-3.5 text-emerald-400" />
@@ -1411,7 +1435,7 @@ export default function Admin() {
               </div>
               
               <button
-                onClick={() => setShowChangePasswordModal(false)}
+                onClick={closeChangePasswordModal}
                 className="text-xs text-slate-400 hover:text-white font-bold p-1"
                 disabled={changePasswordLoading}
               >
@@ -1464,7 +1488,7 @@ export default function Admin() {
                   <div className="flex justify-end pt-3 border-t border-slate-800">
                     <button
                       type="button"
-                      onClick={() => setShowChangePasswordModal(false)}
+                      onClick={closeChangePasswordModal}
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition"
                     >
                       취소
@@ -1526,7 +1550,7 @@ export default function Admin() {
                   <div className="flex justify-end pt-2 border-t border-slate-800 gap-2.5">
                     <button
                       type="button"
-                      onClick={() => setShowChangePasswordModal(false)}
+                      onClick={closeChangePasswordModal}
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition"
                       disabled={changePasswordLoading}
                     >
